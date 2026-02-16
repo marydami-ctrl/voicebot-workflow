@@ -1,4 +1,4 @@
-# 🤖 CashXpress Voice BOT Pipeline
+# 🤖 Cash Voice BOT Pipeline
 
 > An interactive Voice BOT automation workflow and real-time monitoring dashboard — built to demonstrate end-to-end AI-powered loan reminder automation for fintech companies.
 

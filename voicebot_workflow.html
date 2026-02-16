@@ -1,0 +1,1011 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CashXpress Voice BOT Workflow</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;700&family=Cabinet+Grotesk:wght@400;500;700;800;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #111318;
+    --canvas: #161a24;
+    --node-bg: #1e2433;
+    --node-border: #2a3148;
+    --node-hover: #252d42;
+    --accent: #4ade80;
+    --accent2: #f97316;
+    --accent3: #38bdf8;
+    --accent4: #a78bfa;
+    --accent5: #fb7185;
+    --text: #e2e8f0;
+    --muted: #64748b;
+    --wire: #2a3148;
+    --wire-active: #4ade80;
+    --panel: #13171f;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Cabinet Grotesk', sans-serif;
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* TOP BAR */
+  .topbar {
+    height: 52px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--node-border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 20px;
+    flex-shrink: 0;
+    z-index: 10;
+  }
+
+  .topbar-left {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--muted);
+  }
+
+  .breadcrumb span { color: var(--text); font-weight: 700; }
+  .breadcrumb-sep { opacity: 0.3; }
+
+  .workflow-name {
+    font-size: 14px;
+    font-weight: 800;
+    color: var(--text);
+  }
+
+  .tabs {
+    display: flex;
+    gap: 2px;
+    background: var(--node-bg);
+    padding: 4px;
+    border-radius: 8px;
+  }
+
+  .tab {
+    padding: 5px 14px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    color: var(--muted);
+    transition: all 0.15s;
+  }
+
+  .tab.active {
+    background: var(--node-border);
+    color: var(--text);
+  }
+
+  .topbar-right { display: flex; align-items: center; gap: 10px; }
+
+  .btn {
+    padding: 7px 16px;
+    border-radius: 7px;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    border: none;
+    font-family: 'Cabinet Grotesk', sans-serif;
+    transition: all 0.2s;
+  }
+
+  .btn-primary {
+    background: var(--accent);
+    color: #0a1a0e;
+  }
+
+  .btn-primary:hover { background: #22c55e; transform: translateY(-1px); }
+
+  .btn-ghost {
+    background: var(--node-bg);
+    color: var(--muted);
+    border: 1px solid var(--node-border);
+  }
+
+  /* MAIN LAYOUT */
+  .workspace {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  /* CANVAS */
+  .canvas {
+    flex: 1;
+    background: var(--canvas);
+    position: relative;
+    overflow: hidden;
+    background-image:
+      radial-gradient(circle, rgba(255,255,255,0.04) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+
+  /* SVG WIRES */
+  .wires-svg {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  .wire-path {
+    fill: none;
+    stroke: var(--wire);
+    stroke-width: 2;
+    stroke-dasharray: none;
+    transition: stroke 0.3s;
+  }
+
+  .wire-path.active {
+    stroke: var(--accent);
+    stroke-width: 2.5;
+    filter: drop-shadow(0 0 4px rgba(74,222,128,0.5));
+  }
+
+  .wire-path.animated {
+    stroke-dasharray: 8 4;
+    animation: dash 0.6s linear infinite;
+  }
+
+  @keyframes dash {
+    to { stroke-dashoffset: -24; }
+  }
+
+  /* PACKET (data ball) */
+  .packet {
+    position: absolute;
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 10px rgba(74,222,128,0.8);
+    pointer-events: none;
+    z-index: 5;
+    display: none;
+    transform: translate(-50%, -50%);
+  }
+
+  /* NODES */
+  .node {
+    position: absolute;
+    width: 140px;
+    background: var(--node-bg);
+    border: 1.5px solid var(--node-border);
+    border-radius: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+    z-index: 2;
+    user-select: none;
+  }
+
+  .node:hover {
+    border-color: rgba(74,222,128,0.4);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  }
+
+  .node.running {
+    border-color: var(--accent);
+    box-shadow: 0 0 20px rgba(74,222,128,0.3);
+  }
+
+  .node.done {
+    border-color: rgba(74,222,128,0.5);
+  }
+
+  .node.error {
+    border-color: var(--accent5);
+    box-shadow: 0 0 20px rgba(251,113,133,0.3);
+  }
+
+  .node-top {
+    padding: 14px 14px 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    border-bottom: 1px solid var(--node-border);
+  }
+
+  .node-icon-wrap {
+    width: 44px; height: 44px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    position: relative;
+  }
+
+  .node-status-ring {
+    position: absolute;
+    inset: -3px;
+    border-radius: 14px;
+    border: 2px solid transparent;
+    transition: all 0.3s;
+  }
+
+  .node.running .node-status-ring {
+    border-color: var(--accent);
+    animation: spin-ring 1s linear infinite;
+  }
+
+  @keyframes spin-ring {
+    0% { clip-path: inset(0 50% 0 0); }
+    25% { clip-path: inset(0 0 50% 0); }
+    50% { clip-path: inset(50% 0 0 0); }
+    75% { clip-path: inset(0 0 0 50%); }
+    100% { clip-path: inset(0 50% 0 0); }
+  }
+
+  .node-label {
+    font-size: 12px;
+    font-weight: 800;
+    text-align: center;
+    line-height: 1.3;
+  }
+
+  .node-sublabel {
+    font-size: 10px;
+    color: var(--muted);
+    font-family: 'IBM Plex Mono', monospace;
+    text-align: center;
+  }
+
+  .node-bottom {
+    padding: 8px 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .node-items {
+    font-size: 10px;
+    color: var(--muted);
+    font-family: 'IBM Plex Mono', monospace;
+  }
+
+  .node-items.active { color: var(--accent); }
+
+  .node-check {
+    width: 16px; height: 16px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 9px;
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+
+  .node.done .node-check {
+    background: var(--accent);
+    color: #0a1a0e;
+    opacity: 1;
+  }
+
+  .node.error .node-check {
+    background: var(--accent5);
+    color: white;
+    opacity: 1;
+  }
+
+  /* Trigger node special style */
+  .node.trigger { border-color: rgba(249,115,22,0.5); }
+  .node.trigger:hover { border-color: var(--accent2); }
+  .node.trigger.running { border-color: var(--accent2); box-shadow: 0 0 20px rgba(249,115,22,0.3); }
+
+  /* PORT dots */
+  .port {
+    position: absolute;
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: var(--node-border);
+    border: 2px solid var(--canvas);
+    top: 50%; transform: translateY(-50%);
+    transition: background 0.2s;
+  }
+
+  .port.out { right: -5px; }
+  .port.in { left: -5px; }
+  .node.done .port.out { background: var(--accent); }
+
+  /* BOTTOM LOG PANEL */
+  .log-panel {
+    height: 200px;
+    background: var(--panel);
+    border-top: 1px solid var(--node-border);
+    display: flex;
+    flex-shrink: 0;
+  }
+
+  .log-sidebar {
+    width: 200px;
+    border-right: 1px solid var(--node-border);
+    padding: 12px 0;
+  }
+
+  .log-sidebar-title {
+    font-size: 11px;
+    color: var(--muted);
+    font-family: 'IBM Plex Mono', monospace;
+    letter-spacing: 1px;
+    padding: 0 14px;
+    margin-bottom: 10px;
+    text-transform: uppercase;
+  }
+
+  .log-node-item {
+    padding: 7px 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    color: var(--muted);
+    transition: all 0.15s;
+  }
+
+  .log-node-item:hover { background: var(--node-bg); color: var(--text); }
+  .log-node-item.selected { background: var(--node-bg); color: var(--text); }
+
+  .log-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--node-border);
+    flex-shrink: 0;
+  }
+
+  .log-dot.success { background: var(--accent); }
+  .log-dot.running { background: var(--accent2); animation: blink 1s infinite; }
+  .log-dot.pending { background: var(--node-border); }
+
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  .log-main {
+    flex: 1;
+    padding: 14px 18px;
+    overflow-y: auto;
+  }
+
+  .log-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+
+  .log-title {
+    font-size: 13px;
+    font-weight: 800;
+  }
+
+  .log-badge {
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-weight: 700;
+  }
+
+  .log-badge.success { background: rgba(74,222,128,0.15); color: var(--accent); }
+  .log-badge.running { background: rgba(249,115,22,0.15); color: var(--accent2); }
+  .log-badge.pending { background: var(--node-bg); color: var(--muted); }
+
+  .log-output {
+    background: var(--node-bg);
+    border: 1px solid var(--node-border);
+    border-radius: 8px;
+    padding: 12px 14px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    line-height: 1.7;
+    color: var(--text);
+    min-height: 60px;
+  }
+
+  .log-output .key { color: var(--accent3); }
+  .log-output .val { color: var(--accent4); }
+  .log-output .str { color: var(--accent); }
+
+  /* EXECUTE BUTTON */
+  .execute-btn {
+    position: absolute;
+    bottom: 220px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 14px 36px;
+    background: var(--accent2);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    font-size: 14px;
+    font-weight: 800;
+    font-family: 'Cabinet Grotesk', sans-serif;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    z-index: 10;
+    transition: all 0.2s;
+    box-shadow: 0 4px 20px rgba(249,115,22,0.4);
+  }
+
+  .execute-btn:hover {
+    background: #ea6c0a;
+    transform: translateX(-50%) translateY(-2px);
+    box-shadow: 0 8px 28px rgba(249,115,22,0.5);
+  }
+
+  .execute-btn:disabled {
+    background: var(--muted);
+    cursor: not-allowed;
+    box-shadow: none;
+    transform: translateX(-50%);
+  }
+
+  /* ZOOM CONTROLS */
+  .zoom-controls {
+    position: absolute;
+    bottom: 220px;
+    left: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    z-index: 10;
+  }
+
+  .zoom-btn {
+    width: 34px; height: 34px;
+    background: var(--node-bg);
+    border: 1px solid var(--node-border);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: var(--muted);
+    font-size: 16px;
+    transition: all 0.15s;
+  }
+
+  .zoom-btn:hover { background: var(--node-hover); color: var(--text); }
+
+  /* SUCCESS TOAST */
+  .toast {
+    position: absolute;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%) translateY(-80px);
+    background: var(--node-bg);
+    border: 1px solid var(--accent);
+    border-radius: 10px;
+    padding: 12px 20px;
+    font-size: 13px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    z-index: 100;
+    transition: transform 0.4s cubic-bezier(0.34,1.56,0.64,1);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  }
+
+  .toast.show { transform: translateX(-50%) translateY(0); }
+  .toast-icon { font-size: 18px; }
+  .toast-text { color: var(--accent); }
+  .toast-sub { font-size: 11px; color: var(--muted); font-family: 'IBM Plex Mono', monospace; font-weight: 400; }
+
+  /* Execution time */
+  .exec-time {
+    position: absolute;
+    top: 14px;
+    right: 20px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    z-index: 10;
+  }
+
+  .exec-time span { color: var(--accent); }
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <div class="topbar-left">
+    <div class="breadcrumb">
+      👤 Personal <span class="breadcrumb-sep">/</span>
+      <span>CashXpress Voice BOT Pipeline</span>
+    </div>
+    <div style="width:1px;height:20px;background:var(--node-border)"></div>
+    <div class="tabs">
+      <div class="tab active">Editor</div>
+      <div class="tab">Executions</div>
+      <div class="tab">Evaluations</div>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <button class="btn btn-ghost">+ Add tag</button>
+    <button class="btn btn-primary" onclick="executeWorkflow()">▶ Publish</button>
+  </div>
+</div>
+
+<!-- WORKSPACE -->
+<div class="workspace">
+  <div class="canvas" id="canvas">
+
+    <!-- SVG WIRES -->
+    <svg class="wires-svg" id="wiresSvg"></svg>
+
+    <!-- DATA PACKETS -->
+    <div class="packet" id="pkt1"></div>
+    <div class="packet" id="pkt2"></div>
+    <div class="packet" id="pkt3"></div>
+    <div class="packet" id="pkt4"></div>
+    <div class="packet" id="pkt5"></div>
+    <div class="packet" id="pkt6"></div>
+
+    <!-- NODES -->
+    <!-- 1. Schedule Trigger -->
+    <div class="node trigger" id="node1" style="left:60px; top:160px" onclick="selectNode(0)">
+      <div class="port out"></div>
+      <div class="node-top">
+        <div class="node-icon-wrap" style="background:rgba(249,115,22,0.15)">
+          <div class="node-status-ring"></div>
+          ⏰
+        </div>
+        <div class="node-label">Schedule Trigger</div>
+        <div class="node-sublabel">Every 30min</div>
+      </div>
+      <div class="node-bottom">
+        <div class="node-items" id="n1items">–</div>
+        <div class="node-check">✓</div>
+      </div>
+    </div>
+
+    <!-- 2. Fetch Loan Data (API) -->
+    <div class="node" id="node2" style="left:250px; top:160px" onclick="selectNode(1)">
+      <div class="port in"></div>
+      <div class="port out"></div>
+      <div class="node-top">
+        <div class="node-icon-wrap" style="background:rgba(56,189,248,0.15)">
+          <div class="node-status-ring"></div>
+          🔌
+        </div>
+        <div class="node-label">Fetch Loan Data</div>
+        <div class="node-sublabel">HTTP Request</div>
+      </div>
+      <div class="node-bottom">
+        <div class="node-items" id="n2items">–</div>
+        <div class="node-check">✓</div>
+      </div>
+    </div>
+
+    <!-- 3. AI Message Model -->
+    <div class="node" id="node3" style="left:440px; top:160px" onclick="selectNode(2)">
+      <div class="port in"></div>
+      <div class="port out"></div>
+      <div class="node-top">
+        <div class="node-icon-wrap" style="background:rgba(167,139,250,0.15)">
+          <div class="node-status-ring"></div>
+          🤖
+        </div>
+        <div class="node-label">AI Voice Script</div>
+        <div class="node-sublabel">Message a model</div>
+      </div>
+      <div class="node-bottom">
+        <div class="node-items" id="n3items">–</div>
+        <div class="node-check">✓</div>
+      </div>
+    </div>
+
+    <!-- 4. Make Voice Call (Twilio) -->
+    <div class="node" id="node4" style="left:630px; top:160px" onclick="selectNode(3)">
+      <div class="port in"></div>
+      <div class="port out"></div>
+      <div class="node-top">
+        <div class="node-icon-wrap" style="background:rgba(251,113,133,0.15)">
+          <div class="node-status-ring"></div>
+          📞
+        </div>
+        <div class="node-label">Make Voice Call</div>
+        <div class="node-sublabel">Twilio · IVR</div>
+      </div>
+      <div class="node-bottom">
+        <div class="node-items" id="n4items">–</div>
+        <div class="node-check">✓</div>
+      </div>
+    </div>
+
+    <!-- 5. Capture Response -->
+    <div class="node" id="node5" style="left:820px; top:160px" onclick="selectNode(4)">
+      <div class="port in"></div>
+      <div class="port out"></div>
+      <div class="node-top">
+        <div class="node-icon-wrap" style="background:rgba(74,222,128,0.15)">
+          <div class="node-status-ring"></div>
+          🎙️
+        </div>
+        <div class="node-label">Capture Response</div>
+        <div class="node-sublabel">Speech-to-Text</div>
+      </div>
+      <div class="node-bottom">
+        <div class="node-items" id="n5items">–</div>
+        <div class="node-check">✓</div>
+      </div>
+    </div>
+
+    <!-- 6. Update CRM -->
+    <div class="node" id="node6" style="left:1010px; top:160px" onclick="selectNode(5)">
+      <div class="port in"></div>
+      <div class="port out"></div>
+      <div class="node-top">
+        <div class="node-icon-wrap" style="background:rgba(56,189,248,0.15)">
+          <div class="node-status-ring"></div>
+          🗄️
+        </div>
+        <div class="node-label">Update CRM</div>
+        <div class="node-sublabel">Edit Fields</div>
+      </div>
+      <div class="node-bottom">
+        <div class="node-items" id="n6items">–</div>
+        <div class="node-check">✓</div>
+      </div>
+    </div>
+
+    <!-- 7. Send Report -->
+    <div class="node" id="node7" style="left:1200px; top:160px" onclick="selectNode(6)">
+      <div class="port in"></div>
+      <div class="node-top">
+        <div class="node-icon-wrap" style="background:rgba(249,115,22,0.15)">
+          <div class="node-status-ring"></div>
+          📊
+        </div>
+        <div class="node-label">Send Report</div>
+        <div class="node-sublabel">Google Drive</div>
+      </div>
+      <div class="node-bottom">
+        <div class="node-items" id="n7items">–</div>
+        <div class="node-check">✓</div>
+      </div>
+    </div>
+
+    <!-- EXECUTE BUTTON -->
+    <button class="execute-btn" id="execBtn" onclick="executeWorkflow()">
+      ⚡ Execute Workflow
+    </button>
+
+    <!-- ZOOM CONTROLS -->
+    <div class="zoom-controls">
+      <div class="zoom-btn">⊕</div>
+      <div class="zoom-btn">⊖</div>
+      <div class="zoom-btn">⊡</div>
+      <div class="zoom-btn">↺</div>
+    </div>
+
+    <!-- EXEC TIME -->
+    <div class="exec-time" id="execTime"></div>
+
+    <!-- TOAST -->
+    <div class="toast" id="toast">
+      <div class="toast-icon">✅</div>
+      <div>
+        <div class="toast-text">Workflow executed successfully</div>
+        <div class="toast-sub">Success in <span id="toastTime">4.68s</span> · 7 nodes · 142 calls processed</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- LOG PANEL -->
+<div class="log-panel">
+  <div class="log-sidebar">
+    <div class="log-sidebar-title">Logs</div>
+    <div class="log-node-item selected" id="li0" onclick="selectNode(0)">
+      <div class="log-dot pending" id="ld0"></div> Schedule Trigger
+    </div>
+    <div class="log-node-item" id="li1" onclick="selectNode(1)">
+      <div class="log-dot pending" id="ld1"></div> Fetch Loan Data
+    </div>
+    <div class="log-node-item" id="li2" onclick="selectNode(2)">
+      <div class="log-dot pending" id="ld2"></div> AI Voice Script
+    </div>
+    <div class="log-node-item" id="li3" onclick="selectNode(3)">
+      <div class="log-dot pending" id="ld3"></div> Make Voice Call
+    </div>
+    <div class="log-node-item" id="li4" onclick="selectNode(4)">
+      <div class="log-dot pending" id="ld4"></div> Capture Response
+    </div>
+    <div class="log-node-item" id="li5" onclick="selectNode(5)">
+      <div class="log-dot pending" id="ld5"></div> Update CRM
+    </div>
+    <div class="log-node-item" id="li6" onclick="selectNode(6)">
+      <div class="log-dot pending" id="ld6"></div> Send Report
+    </div>
+  </div>
+  <div class="log-main">
+    <div class="log-header">
+      <div class="log-title" id="logTitle">Schedule Trigger</div>
+      <div class="log-badge pending" id="logBadge">PENDING</div>
+      <div style="font-family:'IBM Plex Mono',monospace; font-size:10px; color:var(--muted); margin-left:auto" id="logTime"></div>
+    </div>
+    <div class="log-output" id="logOutput">
+      <span style="color:var(--muted)">// Click a node or press "Execute Workflow" to run the pipeline</span>
+    </div>
+  </div>
+</div>
+
+<script>
+const nodes = [
+  {
+    id: 'node1', label: 'Schedule Trigger', sub: 'Every 30min',
+    color: 'var(--accent2)',
+    badge: 'SUCCESS',
+    time: '0ms',
+    output: `<span class="key">trigger</span>: <span class="str">"schedule"</span>\n<span class="key">interval</span>: <span class="str">"every_30_min"</span>\n<span class="key">time</span>: <span class="str">"2026-02-16T14:30:00Z"</span>\n<span class="key">items_found</span>: <span class="val">142</span> <span style="color:var(--muted)">// overdue loan customers</span>`,
+    items: '1 item'
+  },
+  {
+    id: 'node2', label: 'Fetch Loan Data', sub: 'HTTP Request',
+    color: 'var(--accent3)',
+    badge: 'SUCCESS',
+    time: '312ms',
+    output: `<span class="key">endpoint</span>: <span class="str">"/api/loans/overdue"</span>\n<span class="key">method</span>: <span class="str">"GET"</span>\n<span class="key">status</span>: <span class="val">200</span>\n<span class="key">records</span>: <span class="val">142</span>\n<span class="key">sample</span>: {\n  <span class="key">  customer</span>: <span class="str">"Mary Adeyemi"</span>,\n  <span class="key">  phone</span>: <span class="str">"+234 803 XXX XXXX"</span>,\n  <span class="key">  amount_due</span>: <span class="str">"₦25,000"</span>,\n  <span class="key">  due_date</span>: <span class="str">"2026-02-14"</span>\n}`,
+    items: '142 items'
+  },
+  {
+    id: 'node3', label: 'AI Voice Script', sub: 'Message a model',
+    color: 'var(--accent4)',
+    badge: 'SUCCESS',
+    time: '1.2s',
+    output: `<span class="key">model</span>: <span class="str">"claude-sonnet"</span>\n<span class="key">prompt</span>: <span class="str">"Generate a friendly loan reminder call script"</span>\n<span class="key">response</span>: <span class="str">"Hello Mary, this is CashXpress. Your loan repayment of ₦25,000 was due on February 14th. Please call us or visit our app to make payment. Thank you."</span>\n<span class="key">tokens_used</span>: <span class="val">84</span>`,
+    items: '142 items'
+  },
+  {
+    id: 'node4', label: 'Make Voice Call', sub: 'Twilio · IVR',
+    color: 'var(--accent5)',
+    badge: 'SUCCESS',
+    time: '2.1s',
+    output: `<span class="key">platform</span>: <span class="str">"Twilio"</span>\n<span class="key">calls_initiated</span>: <span class="val">142</span>\n<span class="key">calls_answered</span>: <span class="val">98</span>\n<span class="key">calls_voicemail</span>: <span class="val">31</span>\n<span class="key">calls_failed</span>: <span class="val">13</span>\n<span class="key">containment_rate</span>: <span class="str">"84.2%"</span> <span style="color:var(--muted)">// bot handled without agent</span>`,
+    items: '142 items'
+  },
+  {
+    id: 'node5', label: 'Capture Response', sub: 'Speech-to-Text',
+    color: 'var(--accent)',
+    badge: 'SUCCESS',
+    time: '890ms',
+    output: `<span class="key">engine</span>: <span class="str">"Google Speech-to-Text"</span>\n<span class="key">responses_captured</span>: <span class="val">98</span>\n<span class="key">intents_detected</span>: {\n  <span class="key">  "will_pay_today"</span>: <span class="val">42</span>,\n  <span class="key">  "request_extension"</span>: <span class="val">28</span>,\n  <span class="key">  "dispute_amount"</span>: <span class="val">15</span>,\n  <span class="key">  "escalate_to_agent"</span>: <span class="val">13</span>\n}`,
+    items: '98 items'
+  },
+  {
+    id: 'node6', label: 'Update CRM', sub: 'Edit Fields',
+    color: 'var(--accent3)',
+    badge: 'SUCCESS',
+    time: '445ms',
+    output: `<span class="key">crm</span>: <span class="str">"CashXpress CRM"</span>\n<span class="key">records_updated</span>: <span class="val">98</span>\n<span class="key">fields_set</span>: [\n  <span class="str">  "last_contact_date"</span>,\n  <span class="str">  "call_outcome"</span>,\n  <span class="str">  "follow_up_required"</span>,\n  <span class="str">  "promise_to_pay"</span>\n]\n<span class="key">status</span>: <span class="str">"updated"</span>`,
+    items: '98 items'
+  },
+  {
+    id: 'node7', label: 'Send Report', sub: 'Google Drive',
+    color: 'var(--accent2)',
+    badge: 'SUCCESS',
+    time: '210ms',
+    output: `<span class="key">destination</span>: <span class="str">"Google Drive / Reports"</span>\n<span class="key">file</span>: <span class="str">"VoiceBot_Report_2026-02-16.csv"</span>\n<span class="key">summary</span>: {\n  <span class="key">  "total_called"</span>: <span class="val">142</span>,\n  <span class="key">  "reached"</span>: <span class="val">98</span>,\n  <span class="key">  "promises_to_pay"</span>: <span class="val">42</span>,\n  <span class="key">  "escalated"</span>: <span class="val">13</span>\n}\n<span class="key">upload_status</span>: <span class="str">"success"</span>`,
+    items: '1 item'
+  }
+];
+
+let selectedNode = 0;
+let isRunning = false;
+
+// Draw wires
+function drawWires(activeUpTo = -1) {
+  const svg = document.getElementById('wiresSvg');
+  svg.innerHTML = '';
+  const nodeEls = nodes.map(n => document.getElementById(n.id));
+
+  for (let i = 0; i < nodeEls.length - 1; i++) {
+    const a = nodeEls[i].getBoundingClientRect();
+    const b = nodeEls[i+1].getBoundingClientRect();
+    const canvas = document.getElementById('canvas').getBoundingClientRect();
+
+    const x1 = a.right - canvas.left;
+    const y1 = a.top + a.height/2 - canvas.top;
+    const x2 = b.left - canvas.left;
+    const y2 = b.top + b.height/2 - canvas.top;
+    const cx = (x1 + x2) / 2;
+
+    const path = document.createElementNS('http://www.w3.org/2000/svg','path');
+    path.setAttribute('d', `M${x1},${y1} C${cx},${y1} ${cx},${y2} ${x2},${y2}`);
+    path.setAttribute('class', `wire-path${i < activeUpTo ? ' active' : ''}${i === activeUpTo ? ' active animated' : ''}`);
+    svg.appendChild(path);
+
+    // Label on wire
+    const text = document.createElementNS('http://www.w3.org/2000/svg','text');
+    text.setAttribute('x', cx);
+    text.setAttribute('y', y1 - 8);
+    text.setAttribute('text-anchor','middle');
+    text.setAttribute('fill', i < activeUpTo ? '#4ade80' : '#64748b');
+    text.setAttribute('font-size','9');
+    text.setAttribute('font-family','IBM Plex Mono, monospace');
+    text.textContent = i < activeUpTo ? `${nodes[i].items}` : '';
+    svg.appendChild(text);
+  }
+}
+
+function getNodeCenter(nodeEl) {
+  const canvas = document.getElementById('canvas').getBoundingClientRect();
+  const r = nodeEl.getBoundingClientRect();
+  return {
+    x: r.right - canvas.left,
+    y: r.top + r.height / 2 - canvas.top
+  };
+}
+
+function getNodeIn(nodeEl) {
+  const canvas = document.getElementById('canvas').getBoundingClientRect();
+  const r = nodeEl.getBoundingClientRect();
+  return {
+    x: r.left - canvas.left,
+    y: r.top + r.height / 2 - canvas.top
+  };
+}
+
+// Animate packet along cubic bezier
+function animatePacket(pktId, fromEl, toEl, duration, cb) {
+  const pkt = document.getElementById(pktId);
+  const canvas = document.getElementById('canvas').getBoundingClientRect();
+  const a = fromEl.getBoundingClientRect();
+  const b = toEl.getBoundingClientRect();
+
+  const x1 = a.right - canvas.left;
+  const y1 = a.top + a.height/2 - canvas.top;
+  const x2 = b.left - canvas.left;
+  const y2 = b.top + b.height/2 - canvas.top;
+  const cx = (x1 + x2) / 2;
+
+  pkt.style.display = 'block';
+  let start = null;
+
+  function step(ts) {
+    if (!start) start = ts;
+    const t = Math.min((ts - start) / duration, 1);
+    const mt = 1 - t;
+    // Cubic bezier
+    const bx = mt*mt*mt*x1 + 3*mt*mt*t*cx + 3*mt*t*t*cx + t*t*t*x2;
+    const by = mt*mt*mt*y1 + 3*mt*mt*t*y1 + 3*mt*t*t*y2 + t*t*t*y2;
+    pkt.style.left = bx + 'px';
+    pkt.style.top = by + 'px';
+    if (t < 1) requestAnimationFrame(step);
+    else {
+      pkt.style.display = 'none';
+      if (cb) cb();
+    }
+  }
+  requestAnimationFrame(step);
+}
+
+function selectNode(idx) {
+  // Update log sidebar
+  document.querySelectorAll('.log-node-item').forEach((el,i) => {
+    el.classList.toggle('selected', i === idx);
+  });
+  selectedNode = idx;
+
+  const n = nodes[idx];
+  const nodeEl = document.getElementById(n.id);
+  const isDone = nodeEl.classList.contains('done');
+  const isRunningNode = nodeEl.classList.contains('running');
+
+  document.getElementById('logTitle').textContent = n.label;
+  const badge = document.getElementById('logBadge');
+  badge.className = 'log-badge ' + (isDone ? 'success' : isRunningNode ? 'running' : 'pending');
+  badge.textContent = isDone ? 'SUCCESS' : isRunningNode ? 'RUNNING' : 'PENDING';
+  document.getElementById('logTime').textContent = isDone ? `Success in ${n.time}` : '';
+  document.getElementById('logOutput').innerHTML = isDone
+    ? n.output
+    : `<span style="color:var(--muted)">// ${isRunningNode ? 'Processing...' : 'Waiting to run...'}</span>`;
+}
+
+function setNodeState(idx, state) {
+  const nodeEl = document.getElementById(nodes[idx].id);
+  nodeEl.classList.remove('running','done','error');
+  if (state) nodeEl.classList.add(state);
+
+  // Update items
+  const itemsEl = document.getElementById(`n${idx+1}items`);
+  if (state === 'running') itemsEl.textContent = '···';
+  else if (state === 'done') { itemsEl.textContent = nodes[idx].items; itemsEl.classList.add('active'); }
+
+  // Update log dot
+  const dot = document.getElementById(`ld${idx}`);
+  dot.className = 'log-dot ' + (state === 'done' ? 'success' : state === 'running' ? 'running' : 'pending');
+
+  if (selectedNode === idx) selectNode(idx);
+}
+
+async function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+async function executeWorkflow() {
+  if (isRunning) return;
+  isRunning = true;
+
+  const btn = document.getElementById('execBtn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Running...';
+
+  // Reset all nodes
+  nodes.forEach((n, i) => setNodeState(i, null));
+  drawWires(-1);
+  document.getElementById('execTime').textContent = '';
+
+  const nodeEls = nodes.map(n => document.getElementById(n.id));
+  const pktIds = ['pkt1','pkt2','pkt3','pkt4','pkt5','pkt6'];
+  const start = Date.now();
+
+  for (let i = 0; i < nodes.length; i++) {
+    setNodeState(i, 'running');
+    selectNode(i);
+    drawWires(i);
+
+    // Animate packet if not first
+    if (i > 0) {
+      await new Promise(resolve => {
+        animatePacket(pktIds[i-1], nodeEls[i-1], nodeEls[i], 600, resolve);
+      });
+    }
+
+    await delay(i === 2 ? 1400 : i === 3 ? 1200 : 700);
+    setNodeState(i, 'done');
+    drawWires(i + 1);
+
+    const elapsed = ((Date.now() - start) / 1000).toFixed(2);
+    document.getElementById('execTime').innerHTML = `Running · <span>${elapsed}s</span>`;
+  }
+
+  const total = ((Date.now() - start) / 1000).toFixed(2);
+  document.getElementById('execTime').innerHTML = `Completed in <span>${total}s</span>`;
+  document.getElementById('toastTime').textContent = total + 's';
+
+  // Show toast
+  const toast = document.getElementById('toast');
+  toast.classList.add('show');
+  setTimeout(() => toast.classList.remove('show'), 4000);
+
+  btn.disabled = false;
+  btn.innerHTML = '⚡ Execute Workflow';
+  isRunning = false;
+}
+
+// Initial wire draw
+window.addEventListener('load', () => {
+  setTimeout(() => drawWires(-1), 100);
+  selectNode(0);
+});
+window.addEventListener('resize', () => drawWires());
+</script>
+</body>
+</html>
